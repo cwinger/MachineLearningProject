@@ -1,0 +1,83 @@
+---
+title: "Barlifts Report"
+author: "Chon Winger"
+date: "June 21, 2015"
+output: html_document
+---
+
+In this report, we attempt to classify proper weightlifting techniques.  Sensors are attached to the subjects, who are then instructed to perform weightlifts in five different fashions, specified as A, B, C, D, and E, where A is the correct technique and the other 4 classes correspond to common mistakes.  These variables are stored in the classe variable within the data set.
+
+
+First, we clean the data.  The majority of variables in the dataset, are incomplete, including NA, #DIV/0!, and blank values.  After removing all unclean columns, we have reduced the variables from 160 to 53. Additionally, we remove the first 7 columns which refer to variables independt of our predictor, such as timestamps and subject id's.  Inclusion of these variables would likely skew the resulting model, which would lose generality.
+
+
+```{r,eval=FALSE}
+# read in data
+training = read.csv("data/pml-training.csv")
+
+set.seed(452)
+#remove useless columns and get counts of na
+trainingClean=training[,-(1:7)]
+nacounts = sapply(names(trainingClean),function(x){sum(sapply(trainingClean[,x],is.na))})
+nonNACols = names(nacounts[as.vector(nacounts)==0])
+trainingClean = trainingClean[,nonNACols]
+blankcounts = sapply(names(trainingClean),function(x){sum(sapply(trainingClean[,x],function(y){ifelse(y=="",1,0)}))})
+nonBlankCols = names(blankcounts[as.vector(blankcounts)==0])
+trainingClean = trainingClean[,nonBlankCols]
+```
+
+Next, we partition the data randomly to create a test set and a training set.  the training set will consist of 75% of the data, whereas the test set will consist of 25%
+
+```{r,eval=FALSE}
+# With the cleaned data set, partition into training and testing
+inTrain = createDataPartition(trainingClean$classe,p=3/4)[[1]]
+trainSet = trainingClean[inTrain,]
+testSet = trainingClean[-inTrain,]
+```
+
+Due to time constraints, this study instead used only 20% of the training set data, also randomly selected and partitioned.  The large amount of data available means that the model is unlikely to lose much predictive power, although using all of the data would obviously be better.
+
+```{r, eval=FALSE}
+# Because of the large amount of data, and for speed, only use 20% of the training set to develop rf
+trainSetSubset = createDataPartition(trainSet$classe,p=.2)[[1]]
+
+```
+
+We now fit the model.  For this model, we use a random forest, which will be difficult to interpret, but will likely give accurate results. Cross-validation occurs with Boostrapping (random sampling with replacement) 25 times.  This will liking underestimate the error rate. 
+
+```{r, eval=FALSE}
+modFit = train(classe~.,data=trainSet[trainSetSubset,],method="rf")
+```
+Random Forest 
+
+2946 samples
+  52 predictor
+   5 classes: 'A', 'B', 'C', 'D', 'E' 
+
+No pre-processing
+Resampling: Bootstrapped (25 reps) 
+
+Summary of sample sizes: 2946, 2946, 2946, 2946, 2946, 2946, ... 
+
+Resampling results across tuning parameters:
+
+  mtry  Accuracy   Kappa      Accuracy SD  Kappa SD   
+   2    0.9415172  0.9258558  0.007098320  0.008996949
+  27    0.9467362  0.9324791  0.009727958  0.012381662
+  52    0.9371001  0.9202770  0.012361995  0.015729640
+
+Accuracy was used to select the optimal model using  the largest value.
+The final value used for the model was mtry = 27. 
+
+The accuracy is around 94% on the training set, giving an in-sample error of about 6%.  We would expect the out of sample error to be higher than 6% for the testing set, due to overfitting on the statistical quirks of the training data.
+
+We now apply the model to the testing data:
+
+```{r, echo=TRUE,eval=FALSE}
+pred=predict(modFit,testSet)
+sum(diag(table(pred,testSet$classe)))/sum(table(pred,testSet$classe))
+```
+
+[1] 0.9626835
+
+Strangely enough, the accuracy is actually higher on the testing set, giving an accuracy of 96%, meaning an out of sample error of only 4%
